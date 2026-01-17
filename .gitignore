@@ -7,6 +7,7 @@ __pycache__/
 *.so
 
 img/
+cwd
 
 # Distribution / packaging
 .Python

@@ -1,4 +1,6 @@
 """
+last worked on saturday, 17 jan 2026, 7 PM
+
 eye_in_hand_ibvs_v2.py - Layer 1: Foundation
 
 SO101 robot with eye-in-hand camera and ArUco cube scene.
@@ -7,8 +9,12 @@ This is the clean foundation for building IBVS control in layers.
 Layer 1: Robot + Camera + Scene (this file)
 Layer 2: ArUco detection + pose estimation (future)
 Layer 3: IBVS control law (future)
-Layer 4: Grasp execution (future)
+Layer 4: Search Marker strategy (future)
+Layer 5: Grasp execution (future)
 """
+
+# although the cube is not able to move but it doesnt have a collision or grabbale body. the gripper goes right through it and the cube tumbles off. see the screenshot attached. 
+
 
 import mujoco
 import mujoco.viewer
