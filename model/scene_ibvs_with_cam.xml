@@ -1,0 +1,47 @@
+<mujoco model="scene_ibvs_cube">
+    <include file="so101_with_cam.xml" />
+
+    <visual>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+        <rgba haze="0.15 0.25 0.35 1" />
+        <global azimuth="160" elevation="-20" />
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512"
+            height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4"
+            rgb2="0.1 0.2 0.3"
+            markrgb="0.8 0.8 0.8" width="300" height="300" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5"
+            reflectance="0.2" />
+        <!-- ArUco marker texture -->
+        <texture type="2d" name="aruco_tex" file="aruco_marker.png" />
+        <material name="aruco_mat" texture="aruco_tex" texrepeat="1 1" specular="0" shininess="0" />
+        <!-- Cube material -->
+        <material name="cube_mat" rgba="0.8 0.2 0.2 1" specular="0.3" shininess="0.5" />
+    </asset>
+
+    <worldbody>
+        <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
+        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+
+        <!-- Graspable cube with ArUco marker on top (4cm cube = 40mm) -->
+        <!-- Cube center is at z=0.02 (half of 4cm height above ground) -->
+        <!-- Position 0.25m from base allows vertical approach without singularity -->
+        <body name="target_cube" pos="0.25 0 0.02">
+            <!-- Freejoint allows 6-DOF movement (translation + rotation) -->
+            <freejoint name="cube_joint"/>
+            <!-- Cube body: size is half-extents, so 0.02 = 4cm total -->
+            <!-- Lightweight cardboard: ~20g, high slide friction for grip -->
+            <geom name="cube" type="box" size="0.02 0.02 0.02" material="cube_mat"
+                  mass="0.02" friction="1.0 0.005 0.001"/>
+            <!-- ArUco marker on top face (36mm x 36mm, slightly smaller than cube face) -->
+            <!-- Using thin box instead of plane (plane not allowed in dynamic bodies) -->
+            <geom name="aruco_marker" type="box" size="0.018 0.018 0.0005"
+                  material="aruco_mat" pos="0 0 0.0205" contype="0" conaffinity="0" />
+            <!-- Grasp target site at cube center for distance calculations -->
+            <site name="grasp_target" pos="0 0 0" size="0.005" rgba="0 1 0 0.5" />
+        </body>
+    </worldbody>
+</mujoco>
