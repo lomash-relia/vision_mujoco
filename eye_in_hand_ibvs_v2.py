@@ -13,7 +13,7 @@ Layer 4: Search Marker strategy (future)
 Layer 5: Grasp execution (future)
 """
 
-# although the cube is not able to move but it doesnt have a collision or grabbale body. the gripper goes right through it and the cube tumbles off. see the screenshot attached. 
+# although the cube is able to move but it doesnt have a collision or grabbale body. the gripper goes right through it and the cube tumbles off. see the screenshot attached. we also need to implement bird's eye view pose before search strategy is applied.
 
 
 import mujoco
@@ -44,6 +44,9 @@ CAM_HEIGHT = 480
 
 # Render every N frames for performance
 RENDER_SKIP = 5
+
+# Physics steps per frame (compensate for small timestep=0.0002 for stable grasping)
+PHYSICS_STEPS_PER_FRAME = 10
 
 # ArUco Detection
 ARUCO_DICT = aruco.DICT_4X4_50
@@ -199,8 +202,9 @@ def main():
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         while viewer.is_running():
-            # Physics step
-            mujoco.mj_step(model, data)
+            # Physics steps (multiple for small timestep stability)
+            for _ in range(PHYSICS_STEPS_PER_FRAME):
+                mujoco.mj_step(model, data)
 
             # Render camera periodically
             if frame_count % RENDER_SKIP == 0:

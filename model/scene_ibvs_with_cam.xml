@@ -1,6 +1,11 @@
 <mujoco model="scene_ibvs_cube">
     <include file="so101_with_cam.xml" />
 
+    <!-- Contact solver settings for stable grasping -->
+    <option gravity="0 0 -9.81" timestep="0.0002" cone="elliptic" impratio="10" integrator="implicitfast">
+        <flag contact="enable"/>
+    </option>
+
     <visual>
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
         <rgba haze="0.15 0.25 0.35 1" />
@@ -35,7 +40,8 @@
             <!-- Cube body: size is half-extents, so 0.02 = 4cm total -->
             <!-- Lightweight cardboard: ~20g, high slide friction for grip -->
             <geom name="cube" type="box" size="0.02 0.02 0.02" material="cube_mat"
-                  mass="0.02" friction="1.0 0.005 0.001"/>
+                  mass="0.02" friction="1.5 0.005 0.001" contype="1" conaffinity="1"
+                  condim="6" solref="0.01 1" solimp="0.95 0.99 0.001"/>
             <!-- ArUco marker on top face (36mm x 36mm, slightly smaller than cube face) -->
             <!-- Using thin box instead of plane (plane not allowed in dynamic bodies) -->
             <geom name="aruco_marker" type="box" size="0.018 0.018 0.0005"

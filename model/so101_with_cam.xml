@@ -8,7 +8,7 @@
         <geom type="mesh" contype="0" conaffinity="0" group="2" />
       </default>
       <default class="collision">
-        <geom group="3" />
+        <geom group="3" contype="1" conaffinity="1" />
       </default>
     </default>
   </default>
@@ -102,6 +102,8 @@
                 <geom type="mesh" class="visual" pos="8.32667e-17 -0.000218214 0.000949706" quat="0 1 0 0" mesh="wrist_roll_follower_so101_v1" material="wrist_roll_follower_so101_v1_material" />
                 <geom type="mesh" class="collision" pos="8.32667e-17 -0.000218214 0.000949706" quat="0 1 0 0" mesh="wrist_roll_follower_so101_v1" material="wrist_roll_follower_so101_v1_material" />
                 
+                <geom name="fixed_jaw_col" type="box" size="0.008 0.015 0.003" pos="-0.02 0 -0.065" rgba="0 0 1 0.3" contype="1" conaffinity="1" friction="1.5 0.005 0.001" />
+                
                 <site group="3" name="gripperframe" pos="-0.0079 -0.000218121 -0.0981274" quat="0.707107 -0 0.707107 -2.37788e-17" />
                 
                 <body name="moving_jaw_so101_v1" pos="0.0202 0.0188 -0.0234" quat="0.707107 0.707107 -1.85362e-08 1.85362e-08">
@@ -111,6 +113,8 @@
                   
                   <geom type="mesh" class="visual" pos="-5.55112e-17 -5.55112e-17 0.0189" quat="1 -0 3.00524e-16 -2.00834e-17" mesh="moving_jaw_so101_v1" material="moving_jaw_so101_v1_material" />
                   <geom type="mesh" class="collision" pos="-5.55112e-17 -5.55112e-17 0.0189" quat="1 -0 3.00524e-16 -2.00834e-17" mesh="moving_jaw_so101_v1" material="moving_jaw_so101_v1_material" />
+                  
+                  <geom name="moving_jaw_col" type="box" size="0.008 0.015 0.003" pos="0 -0.03 0.019" rgba="1 0 0 0.3" contype="1" conaffinity="1" friction="1.5 0.005 0.001" />
                 </body>
               </body>
             </body>
