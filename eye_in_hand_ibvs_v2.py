@@ -1,19 +1,17 @@
 """
-last worked on saturday, 17 jan 2026, 7 PM
-
-eye_in_hand_ibvs_v2.py - Layer 1: Foundation
+eye_in_hand_ibvs_v2.py - Layered IBVS System
 
 SO101 robot with eye-in-hand camera and ArUco cube scene.
-This is the clean foundation for building IBVS control in layers.
 
-Layer 1: Robot + Camera + Scene (this file)
-Layer 2: ArUco detection + pose estimation (future)
-Layer 3: IBVS control law (future)
-Layer 4: Search Marker strategy (future)
-Layer 5: Grasp execution (future)
+Layers implemented:
+- Layer 1: Robot + Camera + Scene
+- Layer 2: ArUco detection
+- Layer 3: Search strategy (bird's eye view scanning)
+
+Future layers:
+- Layer 4: IBVS control law
+- Layer 5: Grasp execution
 """
-
-# although the cube is able to move but it doesnt have a collision or grabbale body. the gripper goes right through it and the cube tumbles off. see the screenshot attached. we also need to implement bird's eye view pose before search strategy is applied.
 
 
 import mujoco
@@ -50,6 +48,27 @@ PHYSICS_STEPS_PER_FRAME = 10
 
 # ArUco Detection
 ARUCO_DICT = aruco.DICT_4X4_50
+
+# ==========================================
+# SEARCH CONFIGURATION
+# ==========================================
+# Bird's eye view pose (elevated, camera ~60° down)
+SEARCH_POSE = {
+    'shoulder_lift': -0.8,   # Arm raised (elevated)
+    'elbow_flex': 0.3,       # Elbow less bent - arm extends outward
+    'wrist_flex': 1.2,       # Wrist tilted more toward ground (was 0.5)
+    'wrist_roll': 0.0,
+    'gripper': 0.6           # Gripper open
+}
+
+# Search pattern parameters
+PAN_RANGE = (-1.0, 1.0)      # ±57° base rotation
+PAN_STEP = 0.3               # ~17° increments (7 viewpoints)
+ELBOW_VARIATIONS = [0.0, -0.3, 0.3]  # Mid/near/far (try center first)
+
+# Detection requirements
+REQUIRED_CONSECUTIVE = 3     # Detections needed to confirm
+SETTLE_TIME = 0.3            # Seconds to wait after motion
 
 
 # ==========================================
@@ -155,6 +174,117 @@ def detect_aruco_corners(image):
 
 
 # ==========================================
+# SEARCH STRATEGY
+# ==========================================
+def move_to_search_pose(data, pan_angle, elbow_offset=0.0):
+    """
+    Set joints to bird's eye view pose with given pan angle.
+
+    Args:
+        data: MuJoCo data object
+        pan_angle: Base rotation angle in radians
+        elbow_offset: Offset to elbow_flex for depth variation
+    """
+    data.ctrl[0] = pan_angle                                    # shoulder_pan
+    data.ctrl[1] = SEARCH_POSE['shoulder_lift']                 # shoulder_lift
+    data.ctrl[2] = SEARCH_POSE['elbow_flex'] + elbow_offset     # elbow_flex
+    data.ctrl[3] = SEARCH_POSE['wrist_flex']                    # wrist_flex
+    data.ctrl[4] = SEARCH_POSE['wrist_roll']                    # wrist_roll
+    data.ctrl[5] = SEARCH_POSE['gripper']                       # gripper
+
+
+def execute_search(model, data, renderer, viewer):
+    """
+    Execute radial search pattern with depth variation.
+
+    Scans workspace using base rotation + elbow variation to find ArUco marker.
+    Requires REQUIRED_CONSECUTIVE consecutive detections to confirm.
+
+    Returns:
+        (found, corners): Tuple of (bool, corner array or None)
+    """
+    consecutive = 0
+    steps_per_settle = int(SETTLE_TIME / model.opt.timestep)
+
+    # Generate pan angles (center-out pattern)
+    pan_angles = np.arange(PAN_RANGE[0], PAN_RANGE[1] + PAN_STEP, PAN_STEP)
+
+    print(f"\n=== Starting ArUco Search ===")
+    print(f"Pan angles: {len(pan_angles)} positions")
+    print(f"Elbow variations: {ELBOW_VARIATIONS}")
+    print(f"Required detections: {REQUIRED_CONSECUTIVE}")
+
+    for elbow_idx, elbow_offset in enumerate(ELBOW_VARIATIONS):
+        depth_name = ["mid", "near", "far"][elbow_idx]
+        print(f"\n--- Depth level: {depth_name} (elbow offset: {elbow_offset}) ---")
+
+        for pan_idx, pan in enumerate(pan_angles):
+            # Move to search pose
+            move_to_search_pose(data, pan, elbow_offset)
+
+            # Simulate to let arm settle WITH continuous camera feed
+            render_interval = max(1, steps_per_settle // 50)  # ~50 frames during settle
+            for step in range(steps_per_settle):
+                if not viewer.is_running():
+                    print("Viewer closed")
+                    return False, None
+
+                for _ in range(PHYSICS_STEPS_PER_FRAME):
+                    mujoco.mj_step(model, data)
+                viewer.sync()
+
+                # Render camera at interval for smooth but fast video
+                if step % render_interval == 0:
+                    renderer.update_scene(data, camera=CAM_NAME)
+                    img = renderer.render()
+                    img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                    cv2.putText(img_bgr, f"Moving... pan={pan:.2f}",
+                               (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                    cv2.imshow("Eye-in-Hand Camera", img_bgr)
+                    if cv2.waitKey(1) == 27:
+                        print("Search aborted by user")
+                        return False, None
+
+            # Final capture and detect after settling
+            renderer.update_scene(data, camera=CAM_NAME)
+            img = renderer.render()
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+            corners = detect_aruco_corners(img_bgr)
+
+            # Draw current view
+            if corners is not None:
+                consecutive += 1
+                # Draw detection
+                for corner in corners:
+                    cv2.circle(img_bgr, tuple(corner.astype(int)), 5, (0, 255, 0), -1)
+                pts = corners.astype(int).reshape((-1, 1, 2))
+                cv2.polylines(img_bgr, [pts], True, (0, 255, 0), 2)
+                cv2.putText(img_bgr, f"DETECTED {consecutive}/{REQUIRED_CONSECUTIVE}",
+                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                print(f"  Pan {pan_idx+1}/{len(pan_angles)}: DETECTED ({consecutive}/{REQUIRED_CONSECUTIVE})")
+
+                if consecutive >= REQUIRED_CONSECUTIVE:
+                    cv2.imshow("Eye-in-Hand Camera", img_bgr)
+                    cv2.waitKey(100)
+                    print(f"\n*** MARKER FOUND at pan={pan:.2f}, elbow_offset={elbow_offset} ***")
+                    return True, corners
+            else:
+                consecutive = 0  # Reset on miss
+                cv2.putText(img_bgr, f"Searching... pan={pan:.2f}",
+                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                print(f"  Pan {pan_idx+1}/{len(pan_angles)}: no marker")
+
+            cv2.imshow("Eye-in-Hand Camera", img_bgr)
+            if cv2.waitKey(1) == 27:  # ESC to abort
+                print("Search aborted by user")
+                return False, None
+
+    print("\n*** MARKER NOT FOUND in workspace ***")
+    return False, None
+
+
+# ==========================================
 # MAIN SIMULATION
 # ==========================================
 def main():
@@ -193,14 +323,28 @@ def main():
     renderer = mujoco.Renderer(model, height=CAM_HEIGHT, width=CAM_WIDTH)
 
     print("\n=== Simulation Running ===")
-    print("- MuJoCo viewer: drag robot with mouse")
-    print("- OpenCV window: eye-in-hand camera view")
+    print("- Phase 1: Automatic ArUco search")
+    print("- Phase 2: Manual control (after search)")
     print("- Press ESC to quit")
 
     frame_count = 0
     start_time = time.time()
+    marker_found = False
+    found_corners = None
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
+        # Phase 1: Execute search strategy
+        marker_found, found_corners = execute_search(model, data, renderer, viewer)
+
+        if marker_found:
+            print("\n=== Search Complete: Marker Found ===")
+            print("Entering manual control mode...")
+            print("(Future: IBVS approach would start here)")
+        else:
+            print("\n=== Search Complete: Marker Not Found ===")
+            print("Entering manual control mode...")
+
+        # Phase 2: Manual control loop
         while viewer.is_running():
             # Physics steps (multiple for small timestep stability)
             for _ in range(PHYSICS_STEPS_PER_FRAME):

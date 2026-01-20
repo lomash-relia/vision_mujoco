@@ -1,3 +1,26 @@
+now we need to work on the search strategy. when the simulation starts and all joints are set to 0. the aruco is not in view. for ibvs to work the aruco needs to be in camera frame. we will set the arm to a wrist dominant posture (the arm will be upright, only the wrist will be looking at ground like searching for a friend when you are on top of a building)
+
+we now use
+# ==========================================
+# SEARCH CONFIGURATION
+# ==========================================
+# Bird's eye view pose (elevated, camera ~60° down)
+SEARCH_POSE = {
+    'shoulder_lift': -0.8,   # Arm raised (elevated)
+    'elbow_flex': 0.3,       # Elbow less bent - arm extends outward
+    'wrist_flex': 1.2,       # Wrist tilted more toward ground (was 0.5)
+    'wrist_roll': 0.0,
+    'gripper': 0.6           # Gripper open
+}
+
+# Search pattern parameters
+PAN_RANGE = (-1.0, 1.0)      # ±57° base rotation
+PAN_STEP = 0.3               # ~17° increments (7 viewpoints)
+ELBOW_VARIATIONS = [0.0, -0.3, 0.3]  # Mid/near/far (try center first)
+
+# Detection requirements
+REQUIRED_CONSECUTIVE = 3     # Detections needed to confirm
+SETTLE_TIME = 0.3            # Seconds to wait after motion
 
 
 ### 1) `shoulder < elbow < wrist`
