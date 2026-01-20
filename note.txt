@@ -10,7 +10,7 @@ SEARCH_POSE = {
     'elbow_flex': 0.3,       # Elbow less bent - arm extends outward
     'wrist_flex': 1.2,       # Wrist tilted more toward ground (was 0.5)
     'wrist_roll': 0.0,
-    'gripper': 0.6           # Gripper open
+    'gripper': 0.8           # Gripper open
 }
 
 # Search pattern parameters
