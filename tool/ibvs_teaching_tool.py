@@ -38,7 +38,7 @@ TEMP_ROBOT_XML = r"D:\vision_mujoco\model\so101_with_cam_teach.xml"
 # Camera configuration
 CAM_NAME = "eye_in_hand_cam"
 CAM_MOUNT_BODY = "gripper"
-CAM_POS = "0.01 -0.12 0.03"
+CAM_POS = "0.02 -0.12 0.03"  # Synced with IBVS v2
 CAM_QUAT = "0.05 0 -0.26 0.964"
 CAM_FOVY = "70"
 CAM_WIDTH = 640

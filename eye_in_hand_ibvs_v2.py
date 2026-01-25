@@ -21,6 +21,8 @@ import cv2
 import cv2.aruco as aruco
 import os
 import time
+import json
+import glob
 import xml.etree.ElementTree as ET
 
 # ==========================================
@@ -76,19 +78,59 @@ SETTLE_TIME = 0.2          # Seconds to wait after motion
 # IBVS CONFIGURATION
 # ==========================================
 # Control parameters
-IBVS_LAMBDA = 0.3              # Proportional gain (conservative)
+IBVS_LAMBDA = 0.05            # Proportional gain (conservative)
 IBVS_DT = 0.02                 # Control timestep (seconds)
 MAX_JOINT_VEL = 0.5            # Maximum joint velocity (rad/s)
 CONVERGENCE_THRESHOLD = 8.0    # Pixel error threshold for convergence
 
-# Desired marker appearance in image (calibrated from teaching tool)
-# From ibvs_configs/desired_features_20260122_142604.json
-DESIRED_MARKER_SIZE = 44.75    # Calibrated marker size in pixels
-DESIRED_OFFSET_Y = 111.25      # Calibrated: marker below image center
-DESIRED_OFFSET_X = -14.0       # Calibrated: marker left of image center
+# Physical marker size (from scene_ibvs_cube.xml: 0.018 half-extent = 0.036m full)
+PHYSICAL_MARKER_SIZE = 0.036   # 36mm ArUco marker
+
+# IBVS config directory (contains teaching tool outputs)
+IBVS_CONFIG_DIR = r"ibvs_configs"
+
+# Set to True to use actual taught corners from config, False for idealized square
+USE_TAUGHT_CORNERS = True
+
+
+def load_ibvs_config():
+    """
+    Load the most recent IBVS config from the config directory.
+    Returns config dict or None if not found.
+    """
+    config_pattern = os.path.join(IBVS_CONFIG_DIR, "desired_features_*.json")
+    config_files = sorted(glob.glob(config_pattern), reverse=True)  # Most recent first
+
+    if not config_files:
+        print(f"Warning: No config files found in {IBVS_CONFIG_DIR}")
+        return None
+
+    config_path = config_files[0]  # Use most recent
+    print(f"Loading IBVS config: {config_path}")
+
+    with open(config_path, 'r') as f:
+        return json.load(f)
+
+
+# Load config at module import
+_IBVS_CONFIG = load_ibvs_config()
+
+# Extract parameters from config (with fallbacks)
+if _IBVS_CONFIG:
+    DESIRED_MARKER_SIZE = _IBVS_CONFIG['desired_features']['marker_size_px']
+    DESIRED_OFFSET_X = _IBVS_CONFIG['desired_features']['offset_x']
+    DESIRED_OFFSET_Y = _IBVS_CONFIG['desired_features']['offset_y']
+    DESIRED_CORNERS_TAUGHT = np.array(_IBVS_CONFIG['desired_features']['corners'])
+else:
+    # Fallback defaults
+    DESIRED_MARKER_SIZE = 45.0
+    DESIRED_OFFSET_X = 0.0
+    DESIRED_OFFSET_Y = 100.0
+    DESIRED_CORNERS_TAUGHT = None
+    USE_TAUGHT_CORNERS = False
 
 # Safety limits
-MIN_GRIPPER_HEIGHT = 0.08      # Minimum Z height (meters) - stop IBVS below this
+MIN_GRIPPER_HEIGHT = 0.1     # Minimum Z height (meters) - stop IBVS below this
 
 
 # ==========================================
@@ -170,7 +212,7 @@ def transform_velocity_cam_to_ee(v_cam, R_cam_to_ee, p_cam_in_ee):
     v_linear_ee = R_cam_to_ee @ v_linear_cam
     omega_ee = R_cam_to_ee @ omega_cam
 
-    # Account for lever arm effect: v_ee = v_cam + omega x p
+    # Account for lever arm effect: v_ee = v_cam - omega x p = v_cam + p x omega
     v_linear_ee = v_linear_ee + np.cross(p_cam_in_ee, omega_ee)
 
     return np.concatenate([v_linear_ee, omega_ee])
@@ -205,7 +247,8 @@ def compute_image_jacobian(points, depths):
         y = (v - CY) / FY
 
         # Interaction matrix for one point (2x6)
-        # Standard Chaumette formulation with focal length scaling
+        # Pixel-based Chaumette formulation: ALL columns scaled by FX/FY
+        # for dimensional consistency (error in pixels → velocity in m/s, rad/s)
         Lp = np.array([
             [-FX/Z,    0,    FX*x/Z,  FX*x*y,      -FX*(1+x*x),  FX*y],
             [   0,  -FY/Z,   FY*y/Z,  FY*(1+y*y),  -FY*x*y,     -FY*x]
@@ -255,10 +298,38 @@ def get_depth_at_points(depth_buffer, points, model):
             z_metric = zfar  # At infinity or invalid
 
         # Clamp to reasonable range
-        z_metric = np.clip(z_metric, 0.05, 5.0)
+        # z_metric = np.clip(z_metric, 0.05, 5.0)
         depths.append(z_metric)
 
     return np.array(depths)
+
+
+def estimate_depth_from_marker(corners, physical_size=PHYSICAL_MARKER_SIZE):
+    """
+    Estimate depth from marker size using pinhole camera model.
+
+    More robust than depth buffer for IBVS since marker size is known.
+    Formula: Z = (physical_size * fx) / pixel_size
+
+    Args:
+        corners: (4, 2) array of marker corner positions in pixels
+        physical_size: Real-world marker size in meters
+
+    Returns:
+        depths: (4,) array with estimated depth for each corner (same value)
+    """
+    # Calculate marker size in pixels (average of 4 side lengths)
+    side1 = np.linalg.norm(corners[1] - corners[0])
+    side2 = np.linalg.norm(corners[2] - corners[1])
+    side3 = np.linalg.norm(corners[3] - corners[2])
+    side4 = np.linalg.norm(corners[0] - corners[3])
+    marker_size_px = (side1 + side2 + side3 + side4) / 4
+
+    # Estimate depth using pinhole camera model
+    Z = (physical_size * FX) / marker_size_px
+
+    # Return same depth for all 4 corners (planar marker assumption)
+    return np.full(4, Z)
 
 
 # ==========================================
@@ -306,6 +377,11 @@ def compute_desired_features(width=CAM_WIDTH, height=CAM_HEIGHT,
     Returns:
         desired_corners: (4, 2) array of corner positions
     """
+    # Use actual taught corners if enabled and available (preserves marker orientation)
+    if USE_TAUGHT_CORNERS and DESIRED_CORNERS_TAUGHT is not None:
+        return DESIRED_CORNERS_TAUGHT.copy()
+
+    # Otherwise generate idealized square corners
     cx_img = width / 2 + offset_x
     cy_img = height / 2 + offset_y
     half = marker_size_px / 2
@@ -347,16 +423,21 @@ def ibvs_control(current_features, desired_features, depths, model, data,
     # 1. Compute position feature error (flatten to 8x1)
     error = (current_features - desired_features).flatten()
     error_norm = np.linalg.norm(error)
+    print(error_norm)
 
     # 2. Compute image Jacobian (8x6)
     L = compute_image_jacobian(current_features, depths)
 
     # 3. Compute pseudo-inverse with damping for numerical stability
-    damping = 0.01
+    damping = 0.01  # Reduced from 0.05
     L_pinv = L.T @ np.linalg.inv(L @ L.T + damping * np.eye(L.shape[0]))
 
     # 4. IBVS control law: camera velocity in camera frame
+    # Use constant gain for stable convergence
     v_camera = -lambda_gain * L_pinv @ error
+
+    # 4b. Flip Z for MuJoCo's camera convention (looks along -Z, not +Z)
+    v_camera[2] = -v_camera[2]
 
     # 5. Transform camera velocity to end-effector frame
     R_cam_to_ee, p_cam_in_ee = get_camera_to_ee_transform()
@@ -376,7 +457,7 @@ def ibvs_control(current_features, desired_features, depths, model, data,
     v_world = np.concatenate([v_linear_world, v_angular_world])
 
     # 9. Compute joint velocities using damped pseudo-inverse
-    robot_damping = 0.05
+    robot_damping = 0.02  # Reduced from 0.1
     J_pinv = J_arm.T @ np.linalg.inv(J_arm @ J_arm.T + robot_damping * np.eye(6))
     q_dot = J_pinv @ v_world
 
@@ -694,10 +775,6 @@ def main():
     # Create RGB renderer
     rgb_renderer = mujoco.Renderer(model, height=CAM_HEIGHT, width=CAM_WIDTH)
 
-    # Create depth renderer for IBVS
-    depth_renderer = mujoco.Renderer(model, height=CAM_HEIGHT, width=CAM_WIDTH)
-    depth_renderer.enable_depth_rendering()
-
     # Compute desired features once
     desired_features = compute_desired_features()
 
@@ -716,6 +793,7 @@ def main():
     control_step = 0
     start_time = time.time()
     error_norm = None
+    prev_error_norm = float('inf')  # Track previous error to detect divergence
     marker_lost_frames = 0
     MARKER_LOST_THRESHOLD = 30  # Frames without detection before returning to search
 
@@ -736,10 +814,6 @@ def main():
                 img = rgb_renderer.render()
                 img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-                # Render depth
-                depth_renderer.update_scene(data, camera=CAM_NAME)
-                depth_buffer = depth_renderer.render()
-
                 # Detect ArUco marker
                 corners = detect_aruco_corners(img_bgr)
 
@@ -757,12 +831,22 @@ def main():
                             continue
 
                         # Get depth at corner points
-                        depths = get_depth_at_points(depth_buffer, corners, model)
+                        depths = estimate_depth_from_marker(corners)
 
                         # Run IBVS control
                         q_dot, error_norm, v_cam = ibvs_control(
                             corners, desired_features, depths, model, data
                         )
+
+                        # Restart IBVS if error starts increasing (iterative approach)
+                        if error_norm > prev_error_norm + 1.0:
+                            print(f"\n*** Error increasing ({prev_error_norm:.1f} → {error_norm:.1f})")
+                            print("*** Restarting IBVS from current pose ***")
+                            desired_features = corners.copy()  # Current features become new desired (keep 4x2 shape)
+                            prev_error_norm = float('inf')  # Reset error tracking
+                            continue  # Stay in IBVS_APPROACH, skip control this frame
+                        prev_error_norm = error_norm
+
                         q_dot = clamp_joint_velocities(q_dot)
 
                         # Apply control
@@ -793,7 +877,7 @@ def main():
                 elif state == "CONVERGED":
                     # Hold position - just keep detecting for visualization
                     if corners is not None:
-                        depths = get_depth_at_points(depth_buffer, corners, model)
+                        depths = estimate_depth_from_marker(corners)
                         _, error_norm, _ = ibvs_control(
                             corners, desired_features, depths, model, data
                         )
@@ -808,6 +892,7 @@ def main():
                     # Check if marker becomes visible again
                     if corners is not None:
                         marker_lost_frames = 0
+                        prev_error_norm = float('inf')  # Reset for fresh start
                         state = "IBVS_APPROACH"
                         print("\nMarker re-acquired - resuming IBVS approach")
 
@@ -816,7 +901,7 @@ def main():
                     # User controls robot via MuJoCo viewer
                     # Just update error display if marker visible
                     if corners is not None:
-                        depths = get_depth_at_points(depth_buffer, corners, model)
+                        depths = estimate_depth_from_marker(corners)
                         _, error_norm, _ = ibvs_control(
                             corners, desired_features, depths, model, data
                         )
@@ -826,8 +911,10 @@ def main():
 
                 # Show depth info if available
                 if corners is not None:
-                    depths = get_depth_at_points(depth_buffer, corners, model)
+                    depths = estimate_depth_from_marker(corners)
                     avg_depth = np.mean(depths)
+                    
+                    # print(f"Depths per corner: {[f'{d:.3f}' for d in depths]} → avg = {avg_depth:.3f} m")
                     cv2.putText(img_display, f"Depth: {avg_depth:.3f}m", (10, 90),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
@@ -848,6 +935,7 @@ def main():
                     print("\n=== Starting Automatic Pipeline ===")
                     marker_found, _ = execute_search(model, data, rgb_renderer, viewer)
                     if marker_found:
+                        prev_error_norm = float('inf')  # Reset for fresh start
                         state = "IBVS_APPROACH"
                         print("Marker found - starting IBVS approach...")
                     else:
