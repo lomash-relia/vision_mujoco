@@ -24,6 +24,7 @@ import time
 import json
 import glob
 import xml.etree.ElementTree as ET
+import matplotlib.pyplot as plt
 
 # ==========================================
 # CONFIGURATION
@@ -525,6 +526,169 @@ def draw_ibvs_overlay(image, current_corners, desired_corners, error_norm, state
 
 
 # ==========================================
+# PAPER FIGURE GENERATION
+# ==========================================
+def save_paper_figures(log_time, log_error, log_joints, log_depth,
+                       log_ee_pos, log_v_cam, log_q_dot, log_restarts):
+    """
+    Generate and save publication-quality figures for the conference paper.
+
+    Args:
+        log_time: List of elapsed times (seconds)
+        log_error: List of feature error norms (pixels)
+        log_joints: List of joint position arrays (N, 5)
+        log_depth: List of estimated depths (meters)
+        log_ee_pos: List of end-effector positions (N, 3)
+        log_v_cam: List of camera velocities (N, 6)
+        log_q_dot: List of joint velocities (N, 5)
+        log_restarts: List of times when iterative restart occurred
+    """
+    os.makedirs("paper_figures", exist_ok=True)
+
+    # Convert to numpy arrays
+    t = np.array(log_time)
+    error = np.array(log_error)
+    joints = np.array(log_joints)      # (N, 5)
+    depth = np.array(log_depth)
+    ee_pos = np.array(log_ee_pos)      # (N, 3)
+    v_cam = np.array(log_v_cam)        # (N, 6)
+    q_dot = np.array(log_q_dot)        # (N, 5)
+
+    joint_names = ['shoulder_pan', 'shoulder_lift', 'elbow_flex', 'wrist_flex', 'wrist_roll']
+    vel_names = ['vx', 'vy', 'vz', 'wx', 'wy', 'wz']
+
+    # Figure 1: Error convergence
+    plt.figure(figsize=(8, 4))
+    plt.plot(t, error, 'b-', linewidth=1.5, label='Feature Error')
+    for i, rt in enumerate(log_restarts):
+        label = 'Restart' if i == 0 else None
+        plt.axvline(x=rt, color='r', linestyle='--', alpha=0.7, label=label)
+    plt.xlabel('Time (s)', fontsize=12)
+    plt.ylabel('Feature Error (pixels)', fontsize=12)
+    plt.title('IBVS Convergence', fontsize=14)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('paper_figures/fig1_error_convergence.png', dpi=300)
+    plt.close()
+    print("  Saved fig1_error_convergence.png")
+
+    # Figure 2: Joint positions
+    plt.figure(figsize=(10, 5))
+    for i in range(5):
+        plt.plot(t, joints[:, i], linewidth=1.5, label=joint_names[i])
+    plt.xlabel('Time (s)', fontsize=12)
+    plt.ylabel('Joint Angle (rad)', fontsize=12)
+    plt.title('Joint Trajectories', fontsize=14)
+    plt.grid(True, alpha=0.3)
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plt.savefig('paper_figures/fig2_joint_positions.png', dpi=300)
+    plt.close()
+    print("  Saved fig2_joint_positions.png")
+
+    # Figure 3: Joint velocities
+    plt.figure(figsize=(10, 5))
+    for i in range(5):
+        plt.plot(t, q_dot[:, i], linewidth=1.5, label=joint_names[i])
+    plt.xlabel('Time (s)', fontsize=12)
+    plt.ylabel('Joint Velocity (rad/s)', fontsize=12)
+    plt.title('Joint Velocities (Control Effort)', fontsize=14)
+    plt.grid(True, alpha=0.3)
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plt.savefig('paper_figures/fig3_joint_velocities.png', dpi=300)
+    plt.close()
+    print("  Saved fig3_joint_velocities.png")
+
+    # Figure 4: Depth estimation
+    plt.figure(figsize=(8, 4))
+    plt.plot(t, depth, 'g-', linewidth=1.5)
+    plt.xlabel('Time (s)', fontsize=12)
+    plt.ylabel('Estimated Depth Z (m)', fontsize=12)
+    plt.title('Marker Depth Estimation', fontsize=14)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('paper_figures/fig4_depth_estimation.png', dpi=300)
+    plt.close()
+    print("  Saved fig4_depth_estimation.png")
+
+    # Figure 5: End-effector trajectory (top-down XY view)
+    plt.figure(figsize=(6, 6))
+    plt.plot(ee_pos[:, 0], ee_pos[:, 1], 'b-', linewidth=1.5)
+    plt.plot(ee_pos[0, 0], ee_pos[0, 1], 'go', markersize=10, label='Start')
+    plt.plot(ee_pos[-1, 0], ee_pos[-1, 1], 'r*', markersize=15, label='End')
+    plt.xlabel('X (m)', fontsize=12)
+    plt.ylabel('Y (m)', fontsize=12)
+    plt.title('End-Effector Trajectory (Top View)', fontsize=14)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.axis('equal')
+    plt.tight_layout()
+    plt.savefig('paper_figures/fig5_ee_trajectory_xy.png', dpi=300)
+    plt.close()
+    print("  Saved fig5_ee_trajectory_xy.png")
+
+    # Figure 6: End-effector trajectory (side XZ view)
+    plt.figure(figsize=(8, 5))
+    plt.plot(ee_pos[:, 0], ee_pos[:, 2], 'b-', linewidth=1.5)
+    plt.plot(ee_pos[0, 0], ee_pos[0, 2], 'go', markersize=10, label='Start')
+    plt.plot(ee_pos[-1, 0], ee_pos[-1, 2], 'r*', markersize=15, label='End')
+    plt.xlabel('X (m)', fontsize=12)
+    plt.ylabel('Z (m)', fontsize=12)
+    plt.title('End-Effector Trajectory (Side View)', fontsize=14)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('paper_figures/fig6_ee_trajectory_xz.png', dpi=300)
+    plt.close()
+    print("  Saved fig6_ee_trajectory_xz.png")
+
+    # Figure 7: Camera velocity components
+    fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+
+    # Linear velocities
+    for i in range(3):
+        axes[0].plot(t, v_cam[:, i], linewidth=1.5, label=vel_names[i])
+    axes[0].set_ylabel('Linear Velocity (m/s)', fontsize=11)
+    axes[0].set_title('Camera Velocity', fontsize=14)
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend(loc='best')
+
+    # Angular velocities
+    for i in range(3, 6):
+        axes[1].plot(t, v_cam[:, i], linewidth=1.5, label=vel_names[i])
+    axes[1].set_xlabel('Time (s)', fontsize=12)
+    axes[1].set_ylabel('Angular Velocity (rad/s)', fontsize=11)
+    axes[1].grid(True, alpha=0.3)
+    axes[1].legend(loc='best')
+
+    plt.tight_layout()
+    plt.savefig('paper_figures/fig7_camera_velocity.png', dpi=300)
+    plt.close()
+    print("  Saved fig7_camera_velocity.png")
+
+    # Figure 8: 3D End-effector trajectory
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(ee_pos[:, 0], ee_pos[:, 1], ee_pos[:, 2], 'b-', linewidth=1.5, label='Trajectory')
+    ax.scatter(ee_pos[0, 0], ee_pos[0, 1], ee_pos[0, 2], c='green', s=100, marker='o', label='Start')
+    ax.scatter(ee_pos[-1, 0], ee_pos[-1, 1], ee_pos[-1, 2], c='red', s=150, marker='*', label='End')
+    ax.set_xlabel('X (m)', fontsize=11)
+    ax.set_ylabel('Y (m)', fontsize=11)
+    ax.set_zlabel('Z (m)', fontsize=11)
+    ax.set_title('End-Effector 3D Trajectory', fontsize=14)
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig('paper_figures/fig8_ee_trajectory_3d.png', dpi=300)
+    plt.close()
+    print("  Saved fig8_ee_trajectory_3d.png")
+
+    print(f"\nAll 8 figures saved to paper_figures/")
+
+
+# ==========================================
 # XML PATCHING
 # ==========================================
 def patch_robot_xml(input_path, output_path):
@@ -785,6 +949,7 @@ def main():
     print("\nKeys (click camera window first):")
     print("  O = Start automatic pipeline (search + IBVS)")
     print("  R = Reset to manual mode")
+    print("  S = Save paper figures")
     print("  ESC = Quit")
 
     # State machine - start in MANUAL mode
@@ -796,6 +961,18 @@ def main():
     prev_error_norm = float('inf')  # Track previous error to detect divergence
     marker_lost_frames = 0
     MARKER_LOST_THRESHOLD = 30  # Frames without detection before returning to search
+
+    # === Paper figure data logging ===
+    log_time = []           # Elapsed time (seconds)
+    log_error = []          # Feature error norm (pixels)
+    log_joints = []         # Joint positions q[0:5] (radians)
+    log_depth = []          # Estimated marker depth Z (meters)
+    log_ee_pos = []         # End-effector XYZ position (meters)
+    log_v_cam = []          # Camera velocity [vx,vy,vz,wx,wy,wz]
+    log_q_dot = []          # Joint velocities (rad/s)
+    log_restarts = []       # Times when iterative restart occurred
+    ibvs_start_time = None  # Set when IBVS begins
+    screenshots_taken = {'search': False, 'detected': False, 'midway': False, 'final': False}
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         print("\n=== MANUAL MODE ===")
@@ -838,10 +1015,36 @@ def main():
                             corners, desired_features, depths, model, data
                         )
 
+                        # === Log data for paper figures ===
+                        if ibvs_start_time is None:
+                            ibvs_start_time = time.time()
+                        t_elapsed = time.time() - ibvs_start_time
+                        log_time.append(t_elapsed)
+                        log_error.append(error_norm)
+                        log_joints.append(data.qpos[:5].copy())
+                        log_depth.append(np.mean(depths))
+                        log_ee_pos.append(gripper_pos.copy())
+                        log_v_cam.append(v_cam.copy())
+                        log_q_dot.append(q_dot.copy())
+
+                        # === Screenshot: first detection ===
+                        if not screenshots_taken['detected']:
+                            os.makedirs("paper_figures", exist_ok=True)
+                            cv2.imwrite("paper_figures/frame_02_detected.png", img_bgr)
+                            print("  Screenshot: frame_02_detected.png")
+                            screenshots_taken['detected'] = True
+
+                        # === Screenshot: midway (~250px error) ===
+                        if not screenshots_taken['midway'] and error_norm < 250:
+                            cv2.imwrite("paper_figures/frame_03_midway.png", img_bgr)
+                            print("  Screenshot: frame_03_midway.png")
+                            screenshots_taken['midway'] = True
+
                         # Restart IBVS if error starts increasing (iterative approach)
                         if error_norm > prev_error_norm + 1.0:
                             print(f"\n*** Error increasing ({prev_error_norm:.1f} → {error_norm:.1f})")
                             print("*** Restarting IBVS from current pose ***")
+                            log_restarts.append(t_elapsed)  # Record restart time
                             desired_features = corners.copy()  # Current features become new desired (keep 4x2 shape)
                             prev_error_norm = float('inf')  # Reset error tracking
                             continue  # Stay in IBVS_APPROACH, skip control this frame
@@ -867,6 +1070,16 @@ def main():
                             print(f"\n*** IBVS CONVERGED at step {control_step} ***")
                             print(f"Final error: {error_norm:.2f} px")
                             print("Holding position...")
+                            # === Screenshot: final position ===
+                            if not screenshots_taken['final']:
+                                cv2.imwrite("paper_figures/frame_04_final.png", img_bgr)
+                                print("  Screenshot: frame_04_final.png")
+                                screenshots_taken['final'] = True
+                            # === Auto-save figures on convergence ===
+                            if len(log_time) > 0:
+                                print("\nAuto-saving paper figures...")
+                                save_paper_figures(log_time, log_error, log_joints, log_depth,
+                                                   log_ee_pos, log_v_cam, log_q_dot, log_restarts)
                     else:
                         # Lost marker during approach
                         marker_lost_frames += 1
@@ -941,6 +1154,14 @@ def main():
                     else:
                         state = "LOST"
                         print("Marker not found - press O to retry or R for manual mode")
+            elif key == ord('s') or key == ord('S'):
+                # Save paper figures manually
+                if len(log_time) > 0:
+                    print("\nSaving paper figures...")
+                    save_paper_figures(log_time, log_error, log_joints, log_depth,
+                                       log_ee_pos, log_v_cam, log_q_dot, log_restarts)
+                else:
+                    print("\nNo IBVS data logged yet. Run IBVS first (press O).")
 
             frame_count += 1
             viewer.sync()
