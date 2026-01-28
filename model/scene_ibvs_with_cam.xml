@@ -31,6 +31,9 @@
         <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
         <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
 
+        <!-- External camera for paper figures (closer view of robot) -->
+        <camera name="external_view" pos="0.5 -0.4 0.35" xyaxes="0.7 0.7 0 -0.3 0.3 0.9" fovy="60" />
+
         <!-- Graspable cube with ArUco marker on top (4cm cube = 40mm) -->
         <!-- Cube center is at z=0.02 (half of 4cm height above ground) -->
         <!-- Position 0.25m from base allows vertical approach without singularity -->

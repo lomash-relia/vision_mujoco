@@ -29,6 +29,9 @@
         <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
 
         
+        <camera name="external_view" pos="0.5 -0.4 0.35" xyaxes="0.7 0.7 0 -0.3 0.3 0.9" fovy="60" />
+
+        
         
         
         <body name="target_cube" pos="0.25 0 0.02">

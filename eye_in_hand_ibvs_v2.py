@@ -8,9 +8,6 @@ Layers implemented:
 - Layer 2: ArUco detection
 - Layer 3: Search strategy (bird's eye view scanning)
 - Layer 4: IBVS control law (position-based visual servoing)
-
-Future layers:
-- Layer 5: Grasp execution
 """
 
 
@@ -902,6 +899,17 @@ def execute_search(model, data, renderer, viewer):
 
 
 # ==========================================
+# STAGNATION DETECTION
+# ==========================================
+def is_error_stagnant(error_history, window=15, threshold=0.5):
+    """Check if error has stopped changing (stagnated)."""
+    if len(error_history) < window:
+        return False
+    recent = error_history[-window:]
+    return (max(recent) - min(recent)) < threshold
+
+
+# ==========================================
 # MAIN SIMULATION
 # ==========================================
 def main():
@@ -936,8 +944,19 @@ def main():
         return
     print(f"Camera '{CAM_NAME}' found (id={cam_id})")
 
-    # Create RGB renderer
+    # Create RGB renderer for eye-in-hand camera
     rgb_renderer = mujoco.Renderer(model, height=CAM_HEIGHT, width=CAM_WIDTH)
+
+    # Create external renderer for robot view (same resolution as camera due to framebuffer limit)
+    ext_renderer = mujoco.Renderer(model, height=CAM_HEIGHT, width=CAM_WIDTH)
+
+    def save_robot_view(filename):
+        """Render and save external robot view from fixed camera."""
+        ext_renderer.update_scene(data, camera="external_view")  # Use named camera (closer view)
+        img = ext_renderer.render()
+        img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(filename, img_bgr)
+        print(f"  Robot view: {filename}")
 
     # Compute desired features once
     desired_features = compute_desired_features()
@@ -973,6 +992,9 @@ def main():
     log_restarts = []       # Times when iterative restart occurred
     ibvs_start_time = None  # Set when IBVS begins
     screenshots_taken = {'search': False, 'detected': False, 'midway': False, 'final': False}
+    error_history = []                # Recent error values for stagnation detection
+    STAGNATION_WINDOW = 15           # Number of frames to check (conservative)
+    STAGNATION_THRESHOLD = 0.5        # Max allowed change in error (pixels)
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         print("\n=== MANUAL MODE ===")
@@ -1026,19 +1048,7 @@ def main():
                         log_ee_pos.append(gripper_pos.copy())
                         log_v_cam.append(v_cam.copy())
                         log_q_dot.append(q_dot.copy())
-
-                        # === Screenshot: first detection ===
-                        if not screenshots_taken['detected']:
-                            os.makedirs("paper_figures", exist_ok=True)
-                            cv2.imwrite("paper_figures/frame_02_detected.png", img_bgr)
-                            print("  Screenshot: frame_02_detected.png")
-                            screenshots_taken['detected'] = True
-
-                        # === Screenshot: midway (~250px error) ===
-                        if not screenshots_taken['midway'] and error_norm < 250:
-                            cv2.imwrite("paper_figures/frame_03_midway.png", img_bgr)
-                            print("  Screenshot: frame_03_midway.png")
-                            screenshots_taken['midway'] = True
+                        error_history.append(error_norm)
 
                         # Restart IBVS if error starts increasing (iterative approach)
                         if error_norm > prev_error_norm + 1.0:
@@ -1047,6 +1057,7 @@ def main():
                             log_restarts.append(t_elapsed)  # Record restart time
                             desired_features = corners.copy()  # Current features become new desired (keep 4x2 shape)
                             prev_error_norm = float('inf')  # Reset error tracking
+                            error_history.clear()  # Reset stagnation detection
                             continue  # Stay in IBVS_APPROACH, skip control this frame
                         prev_error_norm = error_norm
 
@@ -1070,11 +1081,6 @@ def main():
                             print(f"\n*** IBVS CONVERGED at step {control_step} ***")
                             print(f"Final error: {error_norm:.2f} px")
                             print("Holding position...")
-                            # === Screenshot: final position ===
-                            if not screenshots_taken['final']:
-                                cv2.imwrite("paper_figures/frame_04_final.png", img_bgr)
-                                print("  Screenshot: frame_04_final.png")
-                                screenshots_taken['final'] = True
                             # === Auto-save figures on convergence ===
                             if len(log_time) > 0:
                                 print("\nAuto-saving paper figures...")
@@ -1094,7 +1100,8 @@ def main():
                         _, error_norm, _ = ibvs_control(
                             corners, desired_features, depths, model, data
                         )
-                        # Don't apply control, just monitor error
+                        # Continue logging for stagnation detection
+                        error_history.append(error_norm)
                     else:
                         marker_lost_frames += 1
                         if marker_lost_frames > MARKER_LOST_THRESHOLD:
@@ -1132,6 +1139,36 @@ def main():
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
                 cv2.imshow("Eye-in-Hand Camera", img_display)
+
+                # === Screenshot capture (with overlays + robot view) ===
+                os.makedirs("paper_figures", exist_ok=True)
+
+                if state == "IBVS_APPROACH" and error_norm is not None:
+                    # First detection screenshot
+                    if not screenshots_taken['detected']:
+                        cv2.imwrite("paper_figures/cam_01_detected.png", img_display)
+                        save_robot_view("paper_figures/robot_01_detected.png")
+                        print("  Screenshots: cam_01_detected.png, robot_01_detected.png")
+                        screenshots_taken['detected'] = True
+
+                    # Midway screenshot (error < 250px)
+                    if not screenshots_taken['midway'] and error_norm < 250:
+                        cv2.imwrite("paper_figures/cam_02_midway.png", img_display)
+                        save_robot_view("paper_figures/robot_02_midway.png")
+                        print("  Screenshots: cam_02_midway.png, robot_02_midway.png")
+                        screenshots_taken['midway'] = True
+
+                # Final screenshot when error has stagnated (true convergence)
+                if not screenshots_taken['final'] and is_error_stagnant(error_history, STAGNATION_WINDOW, STAGNATION_THRESHOLD):
+                    cv2.imwrite("paper_figures/cam_03_final.png", img_display)
+                    save_robot_view("paper_figures/robot_03_final.png")
+                    print("  Screenshots: cam_03_final.png, robot_03_final.png (error stagnated)")
+                    screenshots_taken['final'] = True
+                    # Auto-save all figures on convergence
+                    if len(log_time) > 0:
+                        print("\nAuto-saving paper figures...")
+                        save_paper_figures(log_time, log_error, log_joints, log_depth,
+                                           log_ee_pos, log_v_cam, log_q_dot, log_restarts)
 
             # Key handling - check every frame (must focus OpenCV window to use keys)
             key = cv2.waitKey(1) & 0xFF
