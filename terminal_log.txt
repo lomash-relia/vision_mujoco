@@ -1,0 +1,290 @@
+(mlt_lab) D:\vision_mujoco>python eye_in_hand_ibvs_v2.py
+Loading IBVS config: ibvs_configs\desired_features_20260128_181341.json
+Patching model\so101_new_calib.xml to add camera on 'gripper'...
+Created: model\so101_with_cam.xml
+Created: model\scene_ibvs_with_cam.xml
+Loading: model\scene_ibvs_with_cam.xml
+Model loaded successfully
+Camera 'eye_in_hand_cam' found (id=1)
+
+=== IBVS Visual Servoing System ===
+Camera intrinsics: fx=342.8, fy=342.8, cx=320.0, cy=240.0
+IBVS gain: 0.05, convergence threshold: 8.0 px
+Desired marker size: 45.93817901611328 px
+
+Keys (click camera window first):
+  O = Start automatic pipeline (search + IBVS)
+  R = Reset to manual mode
+  S = Save paper figures
+  ESC = Quit
+
+=== MANUAL MODE ===
+Robot is idle. Press O to start automatic pipeline.
+
+=== Starting Automatic Pipeline ===
+
+=== Starting ArUco Search ===
+Pan angles: 8 positions
+Elbow variations: [0.0, -0.3, 0.3]
+Required detections: 2
+
+--- Depth level: mid (elbow offset: 0.0) ---
+  Pan 1/8: no marker
+  Pan 2/8: no marker
+  Pan 3/8: DETECTED (1/2)
+  Pan 4/8: DETECTED (2/2)
+
+*** MARKER FOUND at pan=-0.10, elbow_offset=0.0 ***
+Marker found - starting IBVS approach...
+481.86616399162125
+  Robot view: paper_figures/robot_01_detected.png
+  Screenshots: cam_01_detected.png, robot_01_detected.png
+481.86616399162125
+480.13331481995704
+479.1189831346698
+477.8148176856804
+475.7951239766965
+472.7790181469563
+470.1616743206532
+467.8365099049026
+464.24131655853296
+461.63622041603276
+457.9639723821078
+454.73398817330553
+451.14077625503995
+447.67063785778936
+444.4085957764544
+440.56441072787527
+437.3888430218585
+433.6968987668692
+429.89649917160295
+426.3754214304572
+422.8392129403327
+418.6107977584907
+415.143348736313
+411.1848732626238
+407.80387442985386
+404.5281201597733
+400.53464269648384
+396.94080163167905
+393.8210253401918
+389.8358628961681
+386.3211099590598
+383.3027524033711
+379.39425404188717
+375.4317514542424
+372.83642525912086
+369.42522924131754
+365.55574130356644
+362.8649886665838
+359.55110902345996
+355.9831456684431
+352.5691421551239
+348.8008027513698
+345.6443258611372
+342.6558039782779
+339.31696096717593
+335.6456464785444
+332.54774093353876
+329.7438399727886
+326.80116278862903
+323.15785616320704
+319.85309127785524
+316.7049099714117
+313.61122428892753
+311.00321541746155
+307.28000260348864
+305.49304411066385
+302.4681801446228
+298.4426243015565
+296.3410197728286
+293.39222893594166
+290.0603385504471
+287.70470972856873
+284.40464131233864
+281.12452756741095
+279.03225619988814
+275.4251259416976
+272.9798527364245
+270.4736586065268
+267.1890716328046
+264.8376861400205
+261.70594185077266
+258.56720596394274
+256.4995126701024
+253.0928683309745
+251.2747500247488
+248.4190008835878
+  Robot view: paper_figures/robot_02_midway.png
+  Screenshots: cam_02_midway.png, robot_02_midway.png
+245.93698379869588
+243.2776191925595
+241.4207944647685
+238.4848003542364
+237.46368143360365
+235.28705871764387
+233.5358644833808
+232.0538730553748
+231.17093242879824
+229.60836221705864
+229.4558781116753
+227.6795994374551
+226.99559467090987
+226.71788636982305
+226.60317738284255
+226.18576436195096
+226.139337577521
+226.77301426757109
+226.80167547882004
+227.11230702011724
+226.9339110842626
+227.63567382991621
+228.74439883852895
+
+*** Error increasing (227.6 → 228.7)
+*** Restarting IBVS from current pose ***
+1.7320508
+
+*** IBVS CONVERGED at step 100 ***
+Final error: 1.73 px
+Holding position...
+
+Auto-saving paper figures...
+  Saved fig1_error_convergence.png
+  Saved fig2_joint_positions.png
+  Saved fig3_joint_velocities.png
+  Saved fig4_depth_estimation.png
+  Saved fig5_ee_trajectory_xy.png
+  Saved fig6_ee_trajectory_xz.png
+  Saved fig7_camera_velocity.png
+  Saved fig8_ee_trajectory_3d.png
+
+All 8 figures saved to paper_figures/
+7.483315
+13.190906
+18.439089
+24.166092
+28.600698
+31.764761
+33.808285
+36.63332
+36.78315
+37.841774
+37.841774
+37.202152
+37.202152
+37.067505
+36.441734
+35.77709
+35.77709
+34.98571
+33.808285
+33.808285
+33.808285
+33.0
+33.0
+32.35738
+32.35738
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+32.480762
+  Robot view: paper_figures/robot_03_final.png
+  Screenshots: cam_03_final.png, robot_03_final.png (error stagnated)
+
+Auto-saving paper figures...
+  Saved fig1_error_convergence.png
+  Saved fig2_joint_positions.png
+  Saved fig3_joint_velocities.png
+  Saved fig4_depth_estimation.png
+  Saved fig5_ee_trajectory_xy.png
+  Saved fig6_ee_trajectory_xz.png
+  Saved fig7_camera_velocity.png
+  Saved fig8_ee_trajectory_3d.png
+
+All 8 figures saved to paper_figures/
+32.480762
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.0
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+32.186954
+
+=== Session Summary ===
+Total frames: 1536
+Control steps: 100
+Duration: 130.4s (11.8 FPS)
+Final state: CONVERGED
+Final error: 32.19 px
+
